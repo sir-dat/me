@@ -4,6 +4,84 @@ from flask import Flask, render_template_string, request
 
 app = Flask(__name__)
 
+# --- API CONFIG ---
+# Using your key directly in the URL to prevent header errors
+API_KEY = "96ea1dd623ccd82fba0becdaff6f8108"
+
+# --- LAYOUT ---
+HTML_LAYOUT = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Cinema</title>
+    <style>
+        body { background: #0b0c0e; color: white; font-family: sans-serif; margin: 0; padding: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 20px; }
+        .card { text-decoration: none; color: white; text-align: center; }
+        .poster { width: 100%; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .player { width: 100%; height: 450px; background: #000; border-radius: 15px; margin-bottom: 20px; border: none; }
+        .watch-btn { display: inline-block; background: #00dd82; color: #000; padding: 10px 20px; border-radius: 20px; text-decoration: none; font-weight: bold; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h2 style="color:#00dd82"><a href="/" style="color:#00dd82; text-decoration:none;">🎬 My Cinema Hub</a></h2>
+    <hr style="border: 0.5px solid #222; margin-bottom: 20px;">
+    {{ content | safe }}
+</body>
+</html>
+"""
+
+@app.route("/")
+def home():
+    url = f"https://themoviedb.org{API_KEY}"
+    try:
+        response = requests.get(url)
+        data = response.json().get('results', [])
+        
+        grid_html = '<div class="grid">'
+        for m in data:
+            poster = f"https://tmdb.org{m.get('poster_path')}"
+            grid_html += f'''
+            <a href="/watch/{m['id']}" class="card">
+                <img src="{poster}" class="poster">
+                <div style="margin-top:8px; font-size:14px;">{m.get('title')}</div>
+            </a>'''
+        grid_html += '</div>'
+        return render_template_string(HTML_LAYOUT, content=grid_html)
+    except Exception as e:
+        return f"Error loading home: {str(e)}"
+
+@app.route("/watch/<tmdb_id>")
+def watch(tmdb_id):
+    url = f"https://themoviedb.org{tmdb_id}?api_key={API_KEY}&append_to_response=external_ids"
+    try:
+        data = requests.get(url).json()
+        imdb_id = data.get('external_ids', {}).get('imdb_id')
+        
+        player = ""
+        if imdb_id:
+            player = f'<iframe src="https://vidsrc.to{imdb_id}" class="player" allowfullscreen></iframe>'
+            
+        details = f"""
+        {player}
+        <h1>{data.get('title')}</h1>
+        <p style="color:#aaa;">{data.get('overview')}</p>
+        <a href="/" class="watch-btn">← Back Home</a>
+        """
+        return render_template_string(HTML_LAYOUT, content=details)
+    except Exception as e:
+        return f"Error loading player: {str(e)}"
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
+import requests
+import os
+from flask import Flask, render_template_string, request
+
+app = Flask(__name__)
+
 # --- YOUR TOKEN ---
 TMDB_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI5NmVhMWRkNjIzY2NkODJmYmEwYmVjZGFmZjZmODEwOCIsIm5iZiI6MTc3ODU4NjAwOS40NzUwMDAxLCJzdWIiOiI2YTAzMTE5OTdhNTNiM2NkZDljYWMwMjciLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.zetZ09cMaN4P67cgqhhajImY_9L9EwE46zrsljWgvNQ"
 
