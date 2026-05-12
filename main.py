@@ -1,13 +1,12 @@
 import requests
+import os
 from flask import Flask, render_template_string, request
 
 app = Flask(__name__)
 
-# --- CONFIGURATION ---
+# --- YOUR TOKEN ---
 TMDB_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI5NmVhMWRkNjIzY2NkODJmYmEwYmVjZGFmZjZmODEwOCIsIm5iZiI6MTc3ODU4NjAwOS40NzUwMDAxLCJzdWIiOiI2YTAzMTE5OTdhNTNiM2NkZDljYWMwMjciLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.zetZ09cMaN4P67cgqhhajImY_9L9EwE46zrsljWgvNQ"
-HEADERS = {"Authorization": f"Bearer {TMDB_TOKEN}", "accept": "application/json"}
 
-# --- STYLING (The MovieBox UI) ---
 HTML_LAYOUT = """
 <!DOCTYPE html>
 <html>
@@ -21,7 +20,7 @@ HTML_LAYOUT = """
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; }
         .card { text-decoration: none; color: white; transition: 0.2s; }
         .card:hover { transform: scale(1.05); }
-        .poster { width: 100%; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .poster { width: 100%; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); background: #1c2129; min-height: 240px; }
         .player-container { width: 100%; height: 500px; background: #000; border-radius: 15px; margin-bottom: 30px; }
         iframe { width: 100%; height: 100%; border: none; border-radius: 15px; }
         .watch-btn { display: inline-block; background: #00dd82; color: #000; padding: 12px 25px; border-radius: 25px; text-decoration: none; font-weight: bold; margin-top: 15px; }
@@ -43,21 +42,25 @@ HTML_LAYOUT = """
 @app.route("/")
 def home():
     url = "https://themoviedb.org"
-    data = requests.get(url, headers=HEADERS).json().get('results', [])
+    response = requests.get(url)
     
+    if response.status_code != 200:
+        return f"API Error: {response.status_code}. Check your API settings."
+
+    data = response.json().get('results', [])
     grid_html = '<h2>Trending Now</h2><div class="grid">'
     for m in data:
-        poster = f"https://tmdb.org{m.get('poster_path')}"
-        grid_html += f'<a href="/watch/{m["id"]}" class="card"><img src="{poster}" class="poster"><div>{m["title"]}</div></a>'
+        path = m.get('poster_path')
+        poster = f"https://tmdb.org{path}" if path else "https://placeholder.com"
+        grid_html += f'<a href="/watch/{m["id"]}" class="card"><img src="{poster}" class="poster"><div>{m.get("title", "Unknown")}</div></a>'
     grid_html += '</div>'
     
     return render_template_string(HTML_LAYOUT, content=grid_html)
 
 @app.route("/watch/<tmdb_id>")
 def watch(tmdb_id):
-    # Fetch details to get the IMDb ID automatically
-    detail_url = f"https://themoviedb.org{tmdb_id}?append_to_response=external_ids"
-    data = requests.get(detail_url, headers=HEADERS).json()
+    detail_url = f"https://themoviedb.org{tmdb_id}?api_key=96ea1dd623ccd82fba0becdaff6f8108&append_to_response=external_ids"
+    data = requests.get(detail_url).json()
     imdb_id = data.get('external_ids', {}).get('imdb_id')
     
     player_html = ""
@@ -66,11 +69,13 @@ def watch(tmdb_id):
     
     info_html = f"""
     {player_html}
-    <h1>{data.get('title')}</h1>
-    <p style="color:#a0a5b0">{data.get('overview')}</p>
+    <h1>{data.get('title', 'Unknown Title')}</h1>
+    <p style="color:#a0a5b0">{data.get('overview', 'No description available.')}</p>
     <a href="/" class="watch-btn">Back to Home</a>
     """
     return render_template_string(HTML_LAYOUT, content=info_html)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
+    # Render assigns a dynamic port; this line captures it automatically
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
